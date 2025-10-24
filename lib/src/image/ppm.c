@@ -26,7 +26,7 @@ image_t *PPM_conversion(const char *filename) {
 
     skip_header_data_for_read(fimg);
 
-    for (int i = 0; i < npixel; i++) {
+    for (size_t i = 0; i < npixel; i++) {
       uint16_t red, green, blue;
       if (fscanf(fimg, "%hu %hu %hu", &red, &green, &blue) != 3) {
         fclose(fimg);

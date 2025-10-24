@@ -39,9 +39,9 @@ image_t *BMP_conversion(const char *filename) {
 
   fseek(fimg, header.bfOffBits, SEEK_SET);
   int padding = (4 - ((img->width * 3) % 4)) % 4;
-  for (int i = 0; i < img->height; i++) {
+  for (size_t i = 0; i < img->height; i++) {
     int row = topDown ? i : (img->height - 1 - i);
-    for (int j = 0; j < img->width; j++) {
+    for (size_t j = 0; j < img->width; j++) {
       int index = row * img->width + j;
       if (fread(&b[index], sizeof(uint8_t), 1, fimg) != 1 ||
           fread(&g[index], sizeof(uint8_t), 1, fimg) != 1 ||
