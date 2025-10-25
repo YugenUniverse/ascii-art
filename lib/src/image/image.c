@@ -1,6 +1,7 @@
 #include "image/image.h"
 #include "image/bmp.h"
 #include "image/ppm.h"
+#include "image/stb_image_handler.h"
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -36,7 +37,7 @@ image_t *create_image(const char *path) {
   case PPM:
     return resize_img(PPM_conversion(path));
   case UNKNOWN:
-    return NULL;
+    return resize_img(loader(path));
   }
 }
 
@@ -56,7 +57,7 @@ int computeBrightness(uint8_t r, uint8_t g, uint8_t b) {
 
   double Ynorm = (Ylin <= 0.0031308) ? 12.92 * Ylin
                                      : (1.055 * pow(Ylin, 1.0 / 2.4) - 0.055);
-  return round(11 * Ynorm);
+  return round(10 * Ynorm);
 }
 
 char colorToChar(uint8_t r, uint8_t g, uint8_t b) {
@@ -66,19 +67,19 @@ char colorToChar(uint8_t r, uint8_t g, uint8_t b) {
 }
 
 void print(image_t *img) {
-  for (int i = 0; i < img->height; i++) {
-    for (int j = 0; j < img->width; j++) {
-      printf("\x1b[38;2;%d;%d;%dm%c", img->channels[0][i * img->width + j],
-             img->channels[1][i * img->width + j],
-             img->channels[2][i * img->width + j],
-             colorToChar(img->channels[0][i * img->width + j],
-                         img->channels[1][i * img->width + j],
-                         img->channels[2][i * img->width + j]));
+  for (size_t i = 0; i < img->height; i++) {
+    for (size_t j = 0; j < img->width; j++) {
+
+      size_t index = i * (size_t)img->width + j;
+      uint8_t r = img->channels[0][index];
+      uint8_t g = img->channels[1][index];
+      uint8_t b = img->channels[2][index];
+      char character = colorToChar(r, g, b);
+      printf("\x1b[38;2;%d;%d;%dm%c\x1b[0m", r, g, b, character);
     }
     printf("\n");
   }
 }
-
 uint8_t bilinear_interpolate_channel(uint8_t *channel, int old_width,
                                      int old_height, double src_x,
                                      double src_y) {
@@ -118,6 +119,11 @@ image_t *resize_img(image_t *original) {
   struct winsize w;
   ioctl(0, TIOCGWINSZ, &w);
   image_t *target = malloc(sizeof(image_t));
+  if (!target) {
+    free_img(original);
+    return NULL;
+  }
+
   if (w.ws_col < original->width)
     target->width = w.ws_col;
   else
@@ -125,7 +131,7 @@ image_t *resize_img(image_t *original) {
 
   target->height = (original->height * target->width * 0.5) / original->width;
 
-  if ((w.ws_row) < target->height) {
+  if (w.ws_row < target->height) {
     target->height = w.ws_row;
     target->width = 2 * target->height * original->width / original->height;
   }
@@ -134,13 +140,21 @@ image_t *resize_img(image_t *original) {
   channel new_r = malloc(npixel * sizeof(uint8_t));
   channel new_g = malloc(npixel * sizeof(uint8_t));
   channel new_b = malloc(npixel * sizeof(uint8_t));
+  if (!new_r || !new_g || !new_b) {
+    free_img(original);
+    free(new_r);
+    free(new_g);
+    free(new_b);
+    free_img(target);
+    return NULL;
+  }
 
-  for (int ty = 0; ty < target->height; ty++) {
-    for (int tx = 0; tx < target->width; tx++) {
+  for (size_t ty = 0; ty < target->height; ty++) {
+    for (size_t tx = 0; tx < target->width; tx++) {
       double src_x = tx * (double)original->width / target->width;
       double src_y = ty * (double)original->height / target->height;
 
-      int new_index = ty * target->width + tx;
+      size_t new_index = ty * target->width + tx;
 
       new_r[new_index] =
           bilinear_interpolate_channel(original->channels[0], original->width,
@@ -154,6 +168,7 @@ image_t *resize_img(image_t *original) {
     }
   }
 
+  free_img(original);
   target->channels[0] = new_r;
   target->channels[1] = new_g;
   target->channels[2] = new_b;
